@@ -11,7 +11,7 @@ class YOLOVocDataset(Dataset):
         self._S = S
         self._B = B
         self._C = C
-        
+
         self._voc_dataset = VOCDetection(
             year=year,
             root=root,
@@ -48,10 +48,13 @@ class YOLOVocDataset(Dataset):
             ])
         }
 
+    def __len__(self):
+        return len(self._voc_dataset)
+
     def __getitem__(self, index: int):
         """
         Outputs a tuple of the image as a tensor and the 7 x 7 x 30 vector expected by YOLO.
-        
+
         :param index: The index to get
         :type index: int
         """
@@ -79,7 +82,7 @@ class YOLOVocDataset(Dataset):
             width = (x2 - x1) / w_orig
             height = (y2 - y1) / h_orig
 
-            i, j = int(y_center * self._S), int (x_center * self._S)
+            i, j = int(y_center * self._S), int(x_center * self._S)
 
             # If the cell does not have an object, assign it this object
             if label_matrix[i, j, 4] == 0:
@@ -90,7 +93,8 @@ class YOLOVocDataset(Dataset):
                 y_cell = self._S * y_center - i
 
                 # Fill the 30-dimensional vector associated with the grid cell
-                label_matrix[i, j, 0:4] = torch.tensor([x_cell, y_cell, width, height])
+                label_matrix[i, j, 0:4] = torch.tensor(
+                    [x_cell, y_cell, width, height])
                 label_matrix[i, j, 5 + class_index] = 1
 
         return self._transform(pil_image), label_matrix
