@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 
@@ -69,5 +68,4 @@ class YOLOBackbone(nn.Module):
         )
 
     def forward(self, X):
-        output = self._feature_extractor(X)
-        return output
+        return self._feature_extractor(X)
