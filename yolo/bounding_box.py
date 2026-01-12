@@ -6,9 +6,12 @@ def compute_iou(box_1: torch.Tensor, box_2: torch.Tensor) -> torch.Tensor:
     Computes the pairwise Intersection over Union (IoU) for two batches of boxes.
 
     :param box_1: The first batch of bounding boxes. Should be of dimension (batch, 49, 4) in format (x, y, w, h)
+    :type box_1: torch.Tensor
     :param box_2: The second batch of bounding boxes. Should be of dimension (batch, 49, 4) in format (x, y, w, h)
+    :type box_2: torch.Tensor
 
     :return: A tensor of dimension (batch, 49) of the IoU of each pair of boxes.
+    :rtype: torch.Tensor
     """
     # Compute the coordinates of the corners for each box
     box_1_x1, box_1_y1 = box_1[..., 0] - \
