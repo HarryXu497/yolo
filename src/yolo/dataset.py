@@ -24,7 +24,7 @@ class YOLOVocDataset(Dataset):
         ])
 
         self._class_map = {
-            i: class_label for i, class_label in enumerate([
+            class_label: i for i, class_label in enumerate([
                 "aeroplane",
                 "bicycle",
                 "bird",
@@ -60,13 +60,15 @@ class YOLOVocDataset(Dataset):
         """
         pil_image, annotations = self._voc_dataset[index]
 
+        print(annotations)
+
         w_orig = int(annotations["annotation"]["size"]["width"])
         h_orig = int(annotations["annotation"]["size"]["height"])
 
-        label_matrix = torch.zeros((self.S, self.S, 5 + self._C))
+        label_matrix = torch.zeros((self._S, self._S, 5 + self._C))
 
         objs = annotations["annotation"]["object"]
-        if isinstance(objs, list):
+        if not isinstance(objs, list):
             objs = [objs]
 
         for obj in objs:
