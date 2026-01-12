@@ -1,57 +1,36 @@
 import torch
 
 
-IMG_WIDTH = 448
-IMG_HEIGHT = 448
+def compute_iou(box_1: torch.Tensor, box_2: torch.Tensor) -> torch.Tensor:
+    """
+    Computes the pairwise Intersection over Union (IoU) for two batches of boxes.
 
+    :param box_1: The first batch of bounding boxes. Should be of dimension (batch, 49, 4) in format (x, y, w, h)
+    :param box_2: The second batch of bounding boxes. Should be of dimension (batch, 49, 4) in format (x, y, w, h)
 
-def convert_bounding_box(bbox: torch.Tensor, grid_x: int, grid_y: int, S=7):
-    x, y, w, h, _ = bbox
+    :return: A tensor of dimension (batch, 49) of the IoU of each pair of boxes.
+    """
+    # Compute the coordinates of the corners for each box
+    box_1_x1, box_1_y1 = box_1[..., 0] - \
+        box_1[..., 2]/2, box_1[..., 1] - box_1[..., 3]/2
+    box_1_x2, box_1_y2 = box_1[..., 0] + \
+        box_1[..., 2]/2, box_1[..., 1] + box_1[..., 3]/2
 
-    x_relative = (x + grid_x) / S
-    y_relative = (y + grid_y) / S
-    x_center = x_relative * IMG_WIDTH
-    y_center = y_relative * IMG_HEIGHT
+    box_2_x1, box_2_y1 = box_2[..., 0] - box_2[..., 2] / \
+        2, box_2[..., 1] - box_2[..., 3]/2
+    box_2_x2, box_2_y2 = box_2[..., 0] + box_2[..., 2] / \
+        2, box_2[..., 1] + box_2[..., 3]/2
 
-    box_width = w * IMG_WIDTH
-    box_height = h * IMG_HEIGHT
+    # Compute intersection coordinates
+    inter_x1 = torch.max(box_1_x1, box_2_x1)
+    inter_y1 = torch.max(box_1_y1, box_2_y1)
+    inter_x2 = torch.min(box_1_x2, box_2_x2)
+    inter_y2 = torch.min(box_1_y2, box_2_y2)
 
-    x1 = x_center - box_width / 2
-    y1 = y_center - box_height / 2
-    x2 = x_center + box_width / 2
-    y2 = y_center + box_height / 2
+    intersection = (inter_x2 - inter_x1).clamp(0) * \
+        (inter_y2 - inter_y1).clamp(0)
+    union = box_1[..., 2] * box_1[..., 3] + \
+        box_2[..., 2] * box_2[..., 3] - intersection
 
-    return x1.item(), y1.item(), x2.item(), y2.item()
-
-
-def iou(bbox_pred, bbox_actual):
-    x1_predicted, y1_predicted, x2_predicted, y2_predicted = convert_bounding_box(
-        bbox_pred)
-    x1_actual, y1_actual, x2_actual, y2_actual = convert_bounding_box(
-        bbox_actual)
-
-    x_intersection_left = max(x1_predicted, x1_actual)
-    x_intersection_right = min(x2_predicted, x2_actual)
-    y_intersection_upper = max(y1_predicted, y1_actual)
-    y_intersection_lower = min(y2_predicted, y2_actual)
-
-    w_inter = max(0, x_intersection_right - x_intersection_left)
-    h_inter = max(0, y_intersection_lower - y_intersection_upper)
-
-    w_box_predicted = max(0, x2_predicted - x1_predicted)
-    h_box_predicted = max(0, y2_predicted - y1_predicted)
-
-    w_box_actual = max(0, x2_actual - x1_actual)
-    h_box_actual = max(0, y2_actual - y1_actual)
-
-    area_predicted = w_box_predicted * h_box_predicted
-    area_actual = w_box_actual * h_box_actual
-
-    area_intersection = w_inter * h_inter
-
-    area_union = area_predicted + area_actual - area_intersection
-
-    if area_union == 0:
-        return 0
-    else:
-        return area_intersection / area_union
+    # Add epsilon to avoid division by 0
+    return intersection / (union + 1e-6)
