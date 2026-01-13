@@ -7,6 +7,10 @@ from pathlib import Path
 
 
 class YOLOVocDataset(Dataset):
+    """
+    Wraps the PASCAL VOC object detection dataset (VOCDetection),
+    and transforms the items into the correct format that YOLO expects
+    """
     def __init__(self, root: Path | str, year: str, image_set: str, S=7, B=2, C=20):
         self._S = S
         self._B = B
@@ -48,10 +52,13 @@ class YOLOVocDataset(Dataset):
             ])
         }
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns the length of the dataset
+        """
         return len(self._voc_dataset)
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Outputs a tuple of the image as a tensor and the 7 x 7 x 30 vector expected by YOLO.
 
