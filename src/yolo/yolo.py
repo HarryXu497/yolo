@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
 
-from yolo.bounding_box import compute_iou
 from yolo.head import YOLOHead
 
 
 class YOLO(nn.Module):
-    def __init__(self, backbone):
+    """
+    The complete YOLO architecture consisting of the backbone and the head.
+    """
+    def __init__(self, backbone: nn.Module):
         super().__init__()
 
         self._conv_layers = nn.Sequential(
@@ -31,7 +33,12 @@ class YOLO(nn.Module):
 
         self._head = YOLOHead()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
+        """
+        Applies the layer to the input x.
+        
+        :param x: The input tensor.
+        """
         output = self._conv_layers(x)
         output = self._head(output)
         output = torch.reshape(output, (-1, 7, 7, 30))
