@@ -13,7 +13,5 @@ class YOLOHead(nn.Module):
             nn.Linear(4096, 7 * 7 * 30)
         )
 
-    def forward(self, X):
-        output = self._feature_extractor(X)
-        output = self._classifier(output)
-        return output
+    def forward(self, x):
+        return self._classifier(x)

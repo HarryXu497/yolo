@@ -11,7 +11,7 @@ class YOLOLoss(nn.Module):
         self._mse = nn.MSELoss(reduction="sum")
         self._lambda_coord = lambda_coord
         self._lambda_noobj = lambda_noobj
-    
+
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         Computes the loss according to the original YOLO paper.
@@ -38,13 +38,19 @@ class YOLOLoss(nn.Module):
 
         # Localization loss
         # Gets the bounding box cells for the best box without branches
-        pred_box = (1 - best_box) * \
+        pred_box_raw = (1 - best_box) * \
             predictions[..., 0:4] + best_box * predictions[..., 5:9]
-        target_box = targets[..., 0:4]
+        target_box_raw = targets[..., 0:4]
 
         # Use abs and epsilon to handle negative weights in random initialization
-        pred_box[..., 2:4] = torch.sqrt(torch.abs(pred_box[..., 2:4]) + 1e-6)
-        target_box[..., 2:4] = torch.sqrt(target_box[..., 2:4])
+        pred_box = torch.cat([
+            pred_box_raw[..., 0:2],
+            torch.sqrt(torch.abs(pred_box_raw[..., 2:4]) + 1e-6)
+        ], dim=-1)
+        target_box = torch.cat([
+            target_box_raw[..., 0:2],
+            torch.sqrt(target_box_raw[..., 2:4])
+        ], dim=-1)
 
         loss_coord = self._sum_squared_error_loss(
             exists_box * pred_box,
@@ -74,15 +80,15 @@ class YOLOLoss(nn.Module):
         # Classification loss
         loss_class = self._sum_squared_error_loss(
             exists_box * predictions[..., 10:],
-            exists_box * targets[..., 10:]
+            exists_box * targets[..., 5:]
         )
 
         # Total loss
         total_loss = (
-            self._lambda_coord * loss_coord,
-            + loss_obj,
-            + self._lambda_noobj * loss_noobj,
-            + loss_class,
+            self._lambda_coord * loss_coord
+            + loss_obj
+            + self._lambda_noobj * loss_noobj
+            + loss_class
         )
 
         # Return average loss over the batch

@@ -67,8 +67,6 @@ class YOLOVocDataset(Dataset):
         """
         pil_image, annotations = self._voc_dataset[index]
 
-        print(annotations)
-
         w_orig = int(annotations["annotation"]["size"]["width"])
         h_orig = int(annotations["annotation"]["size"]["height"])
 
