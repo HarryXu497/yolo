@@ -5,8 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 from tqdm import tqdm
 
-from utils import create_backbone, get_device
-from yolo.pretrain import YOLOPretrain
+from utils import create_pretrain, get_device
 
 MEAN = (0.5071, 0.4867, 0.4408)
 STD = (0.2675, 0.2565, 0.2761)
@@ -58,10 +57,7 @@ def main():
         persistent_workers=True
     )
 
-    backbone = create_backbone("weights/backbone/backbone-20.pt")
-
-    model = YOLOPretrain(backbone=backbone, num_outputs=100)
-    model.load_state_dict(torch.load("weights/pretrain/pretrain-20.pt"))
+    model = create_pretrain(pretrain_path="weights/pretrain/pretrain-10.pt")
     model.to(DEVICE)
 
     result = test(model=model, loader=test_loader)

@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from utils import create_model, get_device
+from utils import create_model, create_model_from_backbone_only, get_device
 from yolo.dataset import YOLOVocDataset
 from yolo.loss import YOLOLoss
 
@@ -25,9 +25,11 @@ def train(
     epochs: int,
     starting_epoch: int = 1,
     train_loader: YOLOVocDataset,
-    test_loader: YOLOVocDataset,
+    val_loader: YOLOVocDataset,
+    scheduler_path: Optional[Path | str],
     loss_fn: nn.Module,
-    save_path: Path | str,
+    train_save_path: Path | str,
+    scheduler_save_path: Path | str,
     checkpoints: set[int]
 ):
     """
@@ -37,14 +39,18 @@ def train(
     :type model: nn.Module
     :param epochs: The number of epochs to train for.
     :type epochs: int
+    :param starting_epoch: The epoch to start at
+    :type starting_epoch: int
     :param train_loader: The data loader for the training dataset
     :type train_loader: YOLOVocDataset
-    :param test_loader: The data loader for the test dataset
-    :type test_loader: YOLOVocDataset
+    :param val_loader: The data loader for the validation dataset
+    :type val_loader: YOLOVocDataset
+    :param scheduler_path: The path to the existing scheduler weights, or None to start from scratch.
+    :type scheduler_path: Optional[Path | str]
     :param loss_fn: The loss function to use
     :type loss_fn: nn.Module
-    :param save_path: The path to save the model weights
-    :type save_path: Path | str
+    :param train_save_path: The path to save the model weights
+    :type train_save_path: Path | str
     :param checkpoints: The set of epochs at which to save the model weights
     :type checkpoints: set[int]
     """
@@ -57,6 +63,9 @@ def train(
     scheduler = OneCycleLR(
         optimizer, max_lr=1e-3, steps_per_epoch=len(train_loader), epochs=epochs
     )
+
+    if scheduler_path is not None:
+        scheduler.load_state_dict(torch.load(scheduler_path, weights_only=True))
 
     for epoch in range(starting_epoch - 1, epochs):
         model.train()
@@ -83,24 +92,26 @@ def train(
             total_loss += loss.item()
             loop.set_postfix(loss=loss.item())
 
-        val_acc = _compute_accuracy(model, test_loader)
+        val_acc = _compute_accuracy(model, val_loader)
         print(
             f"Epoch [{epoch + 1}/{epochs}] - Loss: {total_loss/len(train_loader):.4f} - Val Acc: {val_acc:.2f}%")
 
         if (epoch + 1) in checkpoints:
-            torch.save(model.state_dict(), Path.joinpath(
-                save_path, f"train-{epoch + 1}.pt"))
+            torch.save(model.state_dict(),
+                       train_save_path / f"train-{epoch + 1}.pt")
+            
+            torch.save(scheduler.state_dict(), scheduler_save_path / f"scheduler-{epoch + 1}.pt")
 
 
-def _compute_accuracy(model: nn.Module, test_loader: DataLoader):
+def _compute_accuracy(model: nn.Module, val_loader: DataLoader):
     model.eval()
 
     correct = 0
     total = 0
 
     with torch.no_grad():
-        loop = tqdm(test_loader,
-                    total=len(test_loader), leave=False)
+        loop = tqdm(val_loader,
+                    total=len(val_loader), leave=False)
         loop.set_description(f"Evaluating")
 
         for images, targets in loop:
@@ -131,7 +142,7 @@ def _compute_accuracy(model: nn.Module, test_loader: DataLoader):
 def main():
     train_dataset = YOLOVocDataset(
         root="./dataset/yolo/train_val", year="2012", image_set="train")
-    test_dataset = YOLOVocDataset(
+    val_dataset = YOLOVocDataset(
         root="./dataset/yolo/train_val", year="2012", image_set="val")
     train_loader = DataLoader(
         train_dataset,
@@ -142,18 +153,16 @@ def main():
         persistent_workers=True,
         prefetch_factor=2
     )
-    test_loader = DataLoader(
-        test_dataset,
+    val_loader = DataLoader(
+        val_dataset,
         batch_size=64,
         shuffle=False,
         num_workers=4,
         persistent_workers=True
     )
 
-    model = create_model(
-        backbone_path="weights/backbone/backbone-20.pt",
-        model_path="weights/train/train-1.pt"
-    )
+    model = create_model_from_backbone_only(
+        backbone_path="backbone/backbone-10.pt")
     model.to(DEVICE)
 
     loss_fn = YOLOLoss()
@@ -164,9 +173,11 @@ def main():
         epochs=20,
         starting_epoch=3,
         train_loader=train_loader,
-        test_loader=test_loader,
+        val_loader=val_loader,
+        scheduler_path=None,
         loss_fn=loss_fn,
-        save_path="weights/train",
+        train_save_path="weights/train",
+        scheduler_save_path="weights/train/scheduler",
         checkpoints={i for i in range(0, 41, 2)}
     )
 
