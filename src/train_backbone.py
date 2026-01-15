@@ -64,6 +64,9 @@ def pretrain(
     if isinstance(pretrain_save_path, str):
         pretrain_save_path = Path(pretrain_save_path)
 
+    if isinstance(scheduler_save_path, str):
+        scheduler_save_path = Path(scheduler_save_path)
+
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(
         model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM, weight_decay=WEIGHT_DECAY)

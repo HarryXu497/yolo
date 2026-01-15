@@ -54,8 +54,11 @@ def train(
     :param checkpoints: The set of epochs at which to save the model weights
     :type checkpoints: set[int]
     """
-    if isinstance(save_path, str):
-        save_path = Path(save_path)
+    if isinstance(train_save_path, str):
+        train_save_path = Path(train_save_path)
+    
+    if isinstance(scheduler_save_path, str):
+        scheduler_save_path = Path(scheduler_save_path)
 
     optimizer = optim.Adam(
         model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
