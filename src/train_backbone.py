@@ -21,6 +21,21 @@ MOMENTUM = 0.9
 WEIGHT_DECAY = 5e-4
 
 
+class TransformSubset(Dataset):
+    def __init__(self, subset: Subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+
+    def __getitem__(self, index):
+        x, y = self.subset[index]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
+
+    def __len__(self):
+        return len(self.subset)
+
+
 def pretrain(
     *,
     model: nn.Module,
@@ -67,16 +82,17 @@ def pretrain(
     if isinstance(scheduler_save_path, str):
         scheduler_save_path = Path(scheduler_save_path)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = torch.optim.SGD(
         model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM, weight_decay=WEIGHT_DECAY)
 
     scheduler = OneCycleLR(
-        optimizer, max_lr=0.1, steps_per_epoch=len(train_loader), epochs=epochs
+        optimizer, max_lr=0.05, steps_per_epoch=len(train_loader), epochs=epochs
     )
 
     if scheduler_path is not None:
-        scheduler.load_state_dict(torch.load(scheduler_path, weights_only=True))
+        scheduler.load_state_dict(torch.load(
+            scheduler_path, weights_only=True))
 
     for epoch in range(starting_epoch - 1, epochs):
         model.train()
@@ -104,11 +120,14 @@ def pretrain(
         val_acc = _compute_accuracy(model, validation_loader)
         print(
             f"Epoch [{epoch + 1}/{epochs}] - Loss: {total_loss/len(train_loader):.4f} - Val Acc: {val_acc:.2f}%")
-        
+
         if (epoch + 1) in checkpoints:
-            torch.save(model.backbone.state_dict(), backbone_save_path / f"backbone-{epoch + 1}.pt")
-            torch.save(model.state_dict(), pretrain_save_path / f"pretrain-{epoch + 1}.pt")
-            torch.save(scheduler.state_dict(), scheduler_save_path / f"scheduler-{epoch + 1}.pt")
+            torch.save(model.backbone.state_dict(),
+                       backbone_save_path / f"backbone-{epoch + 1}.pt")
+            torch.save(model.state_dict(), pretrain_save_path /
+                       f"pretrain-{epoch + 1}.pt")
+            torch.save(scheduler.state_dict(),
+                       scheduler_save_path / f"scheduler-{epoch + 1}.pt")
 
 
 def train_val_split(train_set: Dataset, train_ratio: float) -> tuple[Subset, Subset]:
@@ -118,10 +137,11 @@ def train_val_split(train_set: Dataset, train_ratio: float) -> tuple[Subset, Sub
     train_size = int(total_size * train_ratio)
     val_size = total_size - train_size
 
-
     return tuple(random_split(
-        train_set, [train_size, val_size], generator=torch.Generator().manual_seed(42)
+        train_set, [train_size,
+                    val_size], generator=torch.Generator().manual_seed(42)
     ))
+
 
 def _compute_accuracy(model: nn.Module, loader: DataLoader):
     model.eval()
@@ -150,7 +170,16 @@ def _compute_accuracy(model: nn.Module, loader: DataLoader):
 
 
 def main():
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(15),
+        transforms.ColorJitter(brightness=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=MEAN, std=STD),
+    ])
+
+    val_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=MEAN, std=STD),
@@ -158,9 +187,12 @@ def main():
 
     train_set, val_set = train_val_split(
         torchvision.datasets.CIFAR100(
-        root='./dataset/backbone', train=True, download=True, transform=transform),
+            root='./dataset/backbone', train=True, download=True),
         train_ratio=0.8
     )
+
+    train_set = TransformSubset(train_set, transform=train_transform)
+    val_set = TransformSubset(val_set, transform=val_transform)
 
     train_loader = DataLoader(
         train_set,
@@ -169,7 +201,7 @@ def main():
         num_workers=4,
         pin_memory=False,
         persistent_workers=True,
-        prefetch_factor=2
+        prefetch_factor=2,
     )
 
     val_loader = DataLoader(
@@ -180,7 +212,8 @@ def main():
         persistent_workers=True,
     )
 
-    model = create_pretrain(pretrain_path="weights/pretrain/pretrain-10.pt", num_outputs=100)
+    model = create_pretrain(
+        pretrain_path="weights/pretrain/pretrain-10.pt", num_outputs=100)
     model.to(DEVICE)
 
     pretrain(
