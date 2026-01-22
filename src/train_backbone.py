@@ -7,9 +7,10 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader, Subset, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
+from dataclasses import astuple, dataclass
+import os
 
-from utils import create_backbone, create_pretrain, get_device
-from yolo.pretrain import YOLOPretrain
+from utils import create_pretrain, get_device
 
 MEAN = (0.5071, 0.4867, 0.4408)
 STD = (0.2675, 0.2565, 0.2761)
@@ -44,9 +45,8 @@ def pretrain(
     train_loader: DataLoader,
     validation_loader: DataLoader,
     scheduler_path: Optional[Path | str] = None,
-    backbone_save_path: Path | str,
-    pretrain_save_path: Path | str,
-    scheduler_save_path: Path | str,
+    optimizer_path: Optional[Path | str] = None,
+    checkpoint_path: Path | str,
     checkpoints: set[int],
 ):
     """
@@ -73,14 +73,8 @@ def pretrain(
     :param checkpoints: The set of epochs at which to save the model weights
     :type checkpoints: set[int]
     """
-    if isinstance(backbone_save_path, str):
-        backbone_save_path = Path(backbone_save_path)
-
-    if isinstance(pretrain_save_path, str):
-        pretrain_save_path = Path(pretrain_save_path)
-
-    if isinstance(scheduler_save_path, str):
-        scheduler_save_path = Path(scheduler_save_path)
+    if isinstance(checkpoint_path, str):
+        checkpoint_path = Path(checkpoint_path)
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = torch.optim.SGD(
@@ -90,9 +84,17 @@ def pretrain(
         optimizer, max_lr=0.05, steps_per_epoch=len(train_loader), epochs=epochs
     )
 
+    if optimizer_path is not None:
+        optimizer.load_state_dict(torch.load(
+            optimizer_path))
+
     if scheduler_path is not None:
         scheduler.load_state_dict(torch.load(
-            scheduler_path, weights_only=True))
+            scheduler_path))
+    elif starting_epoch > 1:
+        steps_to_skip = (starting_epoch - 1) * len(train_loader)
+        for _ in range(steps_to_skip):
+            scheduler.step()
 
     for epoch in range(starting_epoch - 1, epochs):
         model.train()
@@ -110,6 +112,9 @@ def pretrain(
 
             optimizer.zero_grad()
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
             optimizer.step()
             scheduler.step()
 
@@ -122,12 +127,14 @@ def pretrain(
             f"Epoch [{epoch + 1}/{epochs}] - Loss: {total_loss/len(train_loader):.4f} - Val Acc: {val_acc:.2f}%")
 
         if (epoch + 1) in checkpoints:
+            save_dir = checkpoint_path / str(epoch + 1)
+            save_dir.mkdir(parents=True, exist_ok=True)
+
             torch.save(model.backbone.state_dict(),
-                       backbone_save_path / f"backbone-{epoch + 1}.pt")
-            torch.save(model.state_dict(), pretrain_save_path /
-                       f"pretrain-{epoch + 1}.pt")
-            torch.save(scheduler.state_dict(),
-                       scheduler_save_path / f"scheduler-{epoch + 1}.pt")
+                       save_dir / f"backbone.pt")
+            torch.save(model.state_dict(), save_dir / f"pretrain.pt")
+            torch.save(scheduler.state_dict(), save_dir / f"scheduler.pt")
+            torch.save(optimizer.state_dict(), save_dir / f"optimizer.pt")
 
 
 def train_val_split(train_set: Dataset, train_ratio: float) -> tuple[Subset, Subset]:
@@ -213,20 +220,19 @@ def main():
     )
 
     model = create_pretrain(
-        pretrain_path="weights/pretrain/pretrain-10.pt", num_outputs=100)
+        pretrain_path=None, num_outputs=100)
     model.to(DEVICE)
 
     pretrain(
         model=model,
-        epochs=20,
-        starting_epoch=11,
+        epochs=30,
+        starting_epoch=1,
         train_loader=train_loader,
         validation_loader=val_loader,
         scheduler_path=None,
-        backbone_save_path="weights/backbone",
-        pretrain_save_path="weights/pretrain",
-        scheduler_save_path="weights/pretrain/scheduler",
-        checkpoints={i for i in range(0, 21, 2)}
+        optimizer_path=None,
+        checkpoint_path="weights/checkpoints",
+        checkpoints={i for i in range(0, 31, 2)}
     )
 
 
