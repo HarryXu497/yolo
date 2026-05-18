@@ -221,3 +221,6 @@ dataset/
 # Weights
 weights/
 *.pt
+
+# MacOS
+.DS_Store
