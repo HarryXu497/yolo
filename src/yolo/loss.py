@@ -64,7 +64,7 @@ class YOLOLoss(nn.Module):
 
         loss_obj = self._sum_squared_error_loss(
             exists_box * pred_conf,
-            exists_box * targets[..., 5:6],
+            exists_box * targets[..., 4:5],
         )
 
         # No object confidence loss

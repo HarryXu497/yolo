@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from utils import create_model, create_model_from_backbone_only, get_device
+from utils import create_model_from_backbone_only, get_device
 from yolo.dataset import YOLOVocDataset
 from yolo.loss import YOLOLoss
 
@@ -24,8 +24,8 @@ def train(
     model: nn.Module,
     epochs: int,
     starting_epoch: int = 1,
-    train_loader: YOLOVocDataset,
-    val_loader: YOLOVocDataset,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
     scheduler_path: Optional[Path | str],
     loss_fn: nn.Module,
     train_save_path: Path | str,
@@ -125,7 +125,7 @@ def _compute_accuracy(model: nn.Module, val_loader: DataLoader):
             exists_box = targets[..., 4]
 
             predictions = out[..., 10:]
-            actual = targets[..., 10:]
+            actual = targets[..., 5:]
 
             pred_classes = torch.argmax(predictions, dim=-1)
             actual_classes = torch.argmax(actual, dim=-1)

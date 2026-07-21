@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Sized, cast
 import torch
 import torch.nn as nn
 import torchvision
@@ -11,6 +11,7 @@ from dataclasses import astuple, dataclass
 import os
 
 from utils import create_pretrain, get_device
+from yolo.pretrain import YOLOPretrain
 
 MEAN = (0.5071, 0.4867, 0.4408)
 STD = (0.2675, 0.2565, 0.2761)
@@ -23,7 +24,7 @@ WEIGHT_DECAY = 5e-4
 
 
 class TransformSubset(Dataset):
-    def __init__(self, subset: Subset, transform=None):
+    def __init__(self, subset: Subset[tuple[Any, Any]], transform=None):
         self.subset = subset
         self.transform = transform
 
@@ -39,7 +40,7 @@ class TransformSubset(Dataset):
 
 def pretrain(
     *,
-    model: nn.Module,
+    model: YOLOPretrain,
     epochs: int,
     starting_epoch: int = 1,
     train_loader: DataLoader,
@@ -140,14 +141,15 @@ def pretrain(
 def train_val_split(train_set: Dataset, train_ratio: float) -> tuple[Subset, Subset]:
     assert 0 <= train_ratio <= 1
 
-    total_size = len(train_set)
+    total_size = len(cast(Sized, train_set))
     train_size = int(total_size * train_ratio)
     val_size = total_size - train_size
 
-    return tuple(random_split(
-        train_set, [train_size,
-                    val_size], generator=torch.Generator().manual_seed(42)
-    ))
+    train_subset, val_subset = random_split(
+        train_set, [train_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+    return train_subset, val_subset
 
 
 def _compute_accuracy(model: nn.Module, loader: DataLoader):
